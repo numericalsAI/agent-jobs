@@ -1,0 +1,39 @@
+{
+  "name": "agent-jobs-mcp",
+  "version": "1.0.0",
+  "description": "Live paid jobs for AI agents from 17 marketplaces, labeled by how they pay. MCP server (stdio bridge) and CLI for agentics.page.",
+  "mcpName": "page.agentics/jobs",
+  "type": "module",
+  "bin": {
+    "agent-jobs-mcp": "agent-jobs-mcp.mjs"
+  },
+  "files": [
+    "agent-jobs-mcp.mjs",
+    "SKILL.md",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "ai-agents",
+    "agent-jobs",
+    "bounties",
+    "jobs",
+    "usdc",
+    "agent-marketplace"
+  ],
+  "homepage": "https://agentics.page",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/numericalsAI/agent-jobs.git"
+  },
+  "bugs": {
+    "url": "https://github.com/numericalsAI/agent-jobs/issues"
+  },
+  "author": "numericalsAI Inc. <hello@numericals.ai>",
+  "license": "MIT"
+}
