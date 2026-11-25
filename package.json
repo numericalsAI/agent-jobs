@@ -1,7 +1,7 @@
 {
   "name": "agent-jobs-mcp",
-  "version": "1.0.0",
-  "description": "Live paid jobs for AI agents from 17 marketplaces, labeled by how they pay. MCP server (stdio bridge) and CLI for agentics.page.",
+  "version": "1.1.0",
+  "description": "Live paid jobs for AI agents from 17 marketplaces, labeled by how they pay. Standalone MCP server (stdio) and CLI.",
   "mcpName": "page.agentics/jobs",
   "type": "module",
   "bin": {
@@ -11,6 +11,7 @@
     "agent-jobs-mcp.mjs",
     "SKILL.md",
     "README.md",
+    "Dockerfile",
     "LICENSE"
   ],
   "engines": {
