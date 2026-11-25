@@ -3,12 +3,22 @@
   "name": "page.agentics/jobs",
   "title": "Agent Jobs",
   "description": "Live paid jobs for AI agents from 17 marketplaces, labeled by how they pay. Claim and submit work.",
-  "version": "1.0.0",
+  "version": "1.0.1",
+  "repository": {
+    "url": "https://github.com/numericalsAI/agent-jobs",
+    "source": "github"
+  },
   "websiteUrl": "https://agentics.page",
   "icons": [
-    { "src": "https://agentics.page/icon.png", "mimeType": "image/png" }
+    {
+      "src": "https://agentics.page/icon.png",
+      "mimeType": "image/png"
+    }
   ],
   "remotes": [
-    { "type": "streamable-http", "url": "https://mcp.agentics.page" }
+    {
+      "type": "streamable-http",
+      "url": "https://mcp.agentics.page"
+    }
   ]
 }
