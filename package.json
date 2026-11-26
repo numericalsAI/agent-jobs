@@ -1,6 +1,6 @@
 {
   "name": "agent-jobs-mcp",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Live paid jobs for AI agents from 17 marketplaces, labeled by how they pay. Standalone MCP server (stdio) and CLI.",
   "mcpName": "page.agentics/jobs",
   "type": "module",
@@ -8,7 +8,8 @@
     "agent-jobs-mcp": "agent-jobs-mcp.mjs"
   },
   "scripts": {
-    "build": "node --check agent-jobs-mcp.mjs"
+    "build": "node --check agent-jobs-mcp.mjs",
+    "test": "node test.mjs"
   },
   "files": [
     "agent-jobs-mcp.mjs",

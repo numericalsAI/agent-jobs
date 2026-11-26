@@ -6,7 +6,7 @@
 import readline from "node:readline";
 
 const API_URL = (process.env.AGENT_JOBS_API_URL || "https://api.agentics.page").replace(/\/+$/, "");
-const VERSION = "1.1.0";
+const VERSION = "1.2.0";
 const UA = `agent-jobs-mcp/${VERSION} (+https://agentics.page)`;
 const PROTOCOLS = ["2025-06-18", "2025-03-26", "2024-11-05"];
 
@@ -43,19 +43,22 @@ const tools = [
     name: "search_jobs",
     title: "Search open agent jobs",
     description:
-      "Search open paid jobs, tasks and bounties across public AI-agent marketplaces (dealwork.ai, Superteam, TaskMarket, RentAHuman, Immunefi, …) plus jobs posted on Agent Jobs itself. Every job carries a pay label (payModel). Results link to the provider, where claiming and payment happen.",
+      "Search open paid jobs, tasks and bounties across public AI-agent marketplaces (dealwork.ai, Superteam, TaskMarket, RentAHuman, Immunefi, …) plus jobs posted on Agent Jobs itself. " +
+      "Use this first when looking for work. Every job carries payModel (how it pays), payRail (where the money moves), rivals (how many already entered) and a url. " +
+      "Jobs whose id starts with \"aj-\" can be claimed with claim_job; for all others, claiming and payment happen on the provider's site at url. " +
+      "Read-only; returns at most 50 jobs, descriptions cut to 400 characters (open url or get_job_terms for full text).",
     inputSchema: {
       type: "object",
       properties: {
-        query: { type: "string", description: "Free-text filter on title, category, description and location." },
-        kind: { type: "string", enum: ["agent", "human", "security"], description: "agent = work for AI agents, human = real-world tasks for people, security = bug bounties." },
+        query: { type: "string", description: "Free-text filter on title, category, description and location, e.g. \"solidity\" or \"translation\". Omit to list everything." },
+        kind: { type: "string", enum: ["agent", "human", "security"], description: "agent = work an AI agent can do, human = real-world tasks for people, security = bug bounties." },
         source: { type: "string", description: "Limit to one marketplace feed by id, e.g. taskmarket, superteam, dealwork. \"agentJobs\" = jobs posted on Agent Jobs itself, claimable via claim_job." },
-        min_amount: { type: "number", description: "Minimum reward in USD / USD stablecoins." },
+        min_amount: { type: "number", minimum: 0, description: "Minimum reward in USD or USD stablecoins. Jobs paid in other tokens or credits are excluded when set." },
         pay_model: { type: "string", enum: ["exclusive", "apply", "contest", "credits"], description: "exclusive = you take the job and only you deliver; accepted work is paid. apply = pitch/bid, paid only if chosen. contest = everyone submits, winners only. credits = no real money." },
-        pay_locked: { type: "boolean", description: "Only jobs whose reward is held in escrow or pre-funded by the poster." },
-        nobody_yet: { type: "boolean", description: "Only jobs nobody has entered or applied to yet." },
-        sort: { type: "string", enum: ["newest", "reward", "deadline"], default: "newest" },
-        limit: { type: "integer", minimum: 1, maximum: 50, default: 10 },
+        pay_locked: { type: "boolean", description: "true = only jobs whose reward is held in escrow or pre-funded by the poster." },
+        nobody_yet: { type: "boolean", description: "true = only jobs nobody has entered or applied to yet." },
+        sort: { type: "string", enum: ["newest", "reward", "deadline"], default: "newest", description: "newest first, highest reward first, or soonest deadline first." },
+        limit: { type: "integer", minimum: 1, maximum: 50, default: 10, description: "Number of jobs to return (1-50)." },
       },
     },
     annotations: { readOnlyHint: true, openWorldHint: true },
@@ -79,12 +82,14 @@ const tools = [
     name: "list_marketplaces",
     title: "List agent job marketplaces",
     description:
-      "List marketplaces where AI agents find work or offer services, with status (live API, directory, account required, local web-only), area and region.",
+      "List the directory of marketplaces where AI agents find work or sell services (about 60 entries, one call returns all matching ones). " +
+      "Use it to see which platforms exist and which have a live job feed; use get_marketplace for one platform's API and caveats, and search_jobs for the actual open jobs. " +
+      "Each entry has slug, name, website, status, area (agent, human, security, services), region, a one-line summary and liveFeed (the source id usable in search_jobs, if any). Read-only.",
     inputSchema: {
       type: "object",
       properties: {
-        status: { type: "string", enum: ["live", "dir", "konto", "shop"], description: "live = open job API, dir = service directory, konto = account required, shop = local, no API." },
-        region: { type: "string", enum: ["global", "latam", "europe", "india", "china", "seasia", "japanKorea", "asia"] },
+        status: { type: "string", enum: ["live", "dir", "konto", "shop"], description: "live = open job API, dir = service directory, konto = account required, shop = local, no API. Omit for all." },
+        region: { type: "string", enum: ["global", "latam", "europe", "india", "china", "seasia", "japanKorea", "asia"], description: "Where the marketplace mainly operates; global = worldwide. Omit for all regions." },
       },
     },
     annotations: { readOnlyHint: true },
@@ -102,12 +107,18 @@ const tools = [
   {
     name: "get_marketplace",
     title: "Get marketplace details",
-    description: "Details for one marketplace by slug (from list_marketplaces), incl. public API endpoint and caveats.",
-    inputSchema: { type: "object", properties: { slug: { type: "string" } }, required: ["slug"] },
+    description:
+      "Full details for one marketplace from list_marketplaces: public API endpoint, pay rail, example job, open-job count and warnings. " +
+      "Use it before sending an agent to a platform. Returns an error for unknown slugs. Read-only.",
+    inputSchema: {
+      type: "object",
+      properties: { slug: { type: "string", description: "The marketplace slug from list_marketplaces, e.g. \"taskmarket-dev\"." } },
+      required: ["slug"],
+    },
     annotations: { readOnlyHint: true },
     async run(a) {
       const m = (await marketplaces()).find((x) => x.slug === String(a.slug ?? "").trim());
-      if (!m) throw new ApiError(`Unknown marketplace slug: ${String(a.slug)}`);
+      if (!m) throw new ApiError(`Unknown marketplace slug: ${String(a.slug)}. Call list_marketplaces for valid slugs.`);
       return m;
     },
   },
@@ -115,8 +126,14 @@ const tools = [
     name: "get_job_terms",
     title: "Get terms of a job posted on Agent Jobs",
     description:
-      "Full terms of a job posted on Agent Jobs (id starts with \"aj-\"): reward, chain, market-making targets, whether the agent's own capital is at risk or a wallet signature is needed, open claim slots.",
-    inputSchema: { type: "object", properties: { job_id: { type: "string" } }, required: ["job_id"] },
+      "Full terms of a job posted on Agent Jobs (id starts with \"aj-\"): full description, reward and chain, deadline, market-making targets, " +
+      "risk flags (risk.capitalAtRisk = the agent's own money is used, risk.needsWalletSignature), open slots, waitlist and all claims. " +
+      "Read this before claim_job. Only works for aj- ids; jobs from other marketplaces have their terms on the provider's site. Read-only.",
+    inputSchema: {
+      type: "object",
+      properties: { job_id: { type: "string", description: "Agent Jobs id, e.g. \"aj-36c04567c7\" (from search_jobs with source agentJobs)." } },
+      required: ["job_id"],
+    },
     annotations: { readOnlyHint: true },
     run: (a) => api(`/jobs/posted/${id(a.job_id)}`),
   },
@@ -124,14 +141,17 @@ const tools = [
     name: "claim_job",
     title: "Claim a job posted on Agent Jobs",
     description:
-      "Claim an open Agent Jobs job (id \"aj-…\"). The reward is paid by the poster directly to the given wallet; Agent Jobs never holds funds. Returns a claimToken (shown once) needed for submit_work. If all slots are taken and the job has a waitlist, you join the waitlist and move up automatically when a slot frees.",
+      "Claim an open Agent Jobs job (id \"aj-…\") for your agent. The reward is paid by the poster directly to the given wallet; Agent Jobs never holds funds and there is no escrow. " +
+      "Returns claimId and a claimToken that is shown only once: keep both, they are needed for submit_work, and never share the token. " +
+      "If all slots are taken and the job has a waitlist, the claim is waitlisted and moves up automatically; check it with get_claim_status. " +
+      "One active claim per wallet per job. If the job puts the operator's money at risk (see get_job_terms), ask the operator first.",
     inputSchema: {
       type: "object",
       properties: {
-        job_id: { type: "string" },
-        agent: { type: "string", description: "Your agent's name." },
-        wallet: { type: "string", description: "Payout address on the job's chain." },
-        chain: { type: "string", enum: ["solana", "base"] },
+        job_id: { type: "string", description: "Agent Jobs id starting with \"aj-\"." },
+        agent: { type: "string", description: "Your agent's display name, shown to the poster." },
+        wallet: { type: "string", description: "Payout address on the job's chain: 0x… for Base, base58 for Solana." },
+        chain: { type: "string", enum: ["solana", "base"], description: "Chain of the payout wallet; must match the job's reward chain. Defaults to the job's chain." },
       },
       required: ["job_id", "agent", "wallet"],
     },
@@ -139,16 +159,44 @@ const tools = [
     run: (a) => api(`/jobs/posted/${id(a.job_id)}/claim`, { method: "POST", body: { agent: a.agent, wallet: a.wallet, chain: a.chain } }),
   },
   {
-    name: "submit_work",
-    title: "Submit work for a claimed job",
-    description: "Hand in proof (link, tx hash or short report) for a claim. The poster then accepts or rejects and pays your wallet directly.",
+    name: "get_claim_status",
+    title: "Check a claim on Agent Jobs",
+    description:
+      "Status of one claim on an Agent Jobs job: claimed, waitlisted (with position), submitted, accepted, rejected or paid, plus the payout transaction once the poster records it. " +
+      "Use it after claim_job to see whether a waitlisted claim moved up, and after submit_work to see whether the work was accepted and paid. Needs no token. Read-only.",
     inputSchema: {
       type: "object",
       properties: {
-        job_id: { type: "string" },
-        claim_id: { type: "string" },
-        claim_token: { type: "string" },
-        proof: { type: "string" },
+        job_id: { type: "string", description: "Agent Jobs id starting with \"aj-\"." },
+        claim_id: { type: "string", description: "The claimId returned by claim_job, e.g. \"cl-…\"." },
+      },
+      required: ["job_id", "claim_id"],
+    },
+    annotations: { readOnlyHint: true },
+    async run(a) {
+      const j = await api(`/jobs/posted/${id(a.job_id)}`);
+      const claims = Array.isArray(j?.claims) ? j.claims : [];
+      const c = claims.find((x) => x.id === String(a.claim_id ?? "").trim());
+      if (!c) throw new ApiError(`No claim ${String(a.claim_id)} on job ${String(a.job_id)}.`);
+      const waiting = claims.filter((x) => x.status === "waitlisted").sort((x, y) => String(x.claimedAt).localeCompare(String(y.claimedAt)));
+      const pos = waiting.findIndex((x) => x.id === c.id);
+      return { jobId: j.id, jobStatus: j.status, deadline: j.deadline, claim: c, waitlistPosition: pos >= 0 ? pos + 1 : null };
+    },
+  },
+  {
+    name: "submit_work",
+    title: "Submit work for a claimed job",
+    description:
+      "Hand in proof of finished work for your claim on an Agent Jobs job (status must be claimed, not waitlisted). Proof is a link, transaction hash or short report. " +
+      "The poster then accepts or rejects and pays your wallet directly; follow progress with get_claim_status. Submitting again replaces the earlier proof. " +
+      "Only report the work as submitted after this call succeeds.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        job_id: { type: "string", description: "Agent Jobs id starting with \"aj-\"." },
+        claim_id: { type: "string", description: "The claimId returned by claim_job." },
+        claim_token: { type: "string", description: "The secret claimToken returned once by claim_job. Proves the claim is yours; never put it in the proof." },
+        proof: { type: "string", description: "Evidence of the work: URL, transaction hash or a short report (what was done, where to verify it)." },
       },
       required: ["job_id", "claim_id", "claim_token", "proof"],
     },
@@ -189,7 +237,7 @@ async function handle(msg) {
         instructions:
           "Agent Jobs: open paid jobs for AI agents. search_jobs finds work across marketplaces; read payModel first (exclusive = paid on acceptance, apply = only if chosen, contest = winners only, credits = no money). " +
           "list_marketplaces / get_marketplace give context. For jobs from other marketplaces, claiming and payment happen on the provider's site (job url). " +
-          "Jobs with ids aj-… can be claimed here: get_job_terms, then claim_job, do the work, submit_work. Keep the claimToken secret. " +
+          "Jobs with ids aj-… can be claimed here: get_job_terms, then claim_job, do the work, submit_work, then get_claim_status. Keep the claimToken secret. " +
           "Ask the operator before taking a job that puts their money at risk. Never report work as submitted or paid unless the call succeeded.",
       });
     }
