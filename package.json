@@ -7,6 +7,9 @@
   "bin": {
     "agent-jobs-mcp": "agent-jobs-mcp.mjs"
   },
+  "scripts": {
+    "build": "node --check agent-jobs-mcp.mjs"
+  },
   "files": [
     "agent-jobs-mcp.mjs",
     "SKILL.md",
